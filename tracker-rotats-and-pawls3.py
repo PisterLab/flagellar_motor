@@ -25,16 +25,26 @@ def main():
         return
     
     cap = cv2.VideoCapture(video_file)
-    _, first_frame = cap.read()
+    storage_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    storage_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) 
+    sar = storage_w / storage_h
+    print(f"Storage aspect ratio: {sar:.2f} (resolution: {storage_w}×{storage_h})")
 
+    numerator = cap.get(cv2.CAP_PROP_SAR_NUM) or 1.0
+    denominator = cap.get(cv2.CAP_PROP_SAR_DEN) or 1.0
+    par = numerator / denominator
+    print(f"Pixel aspect ratio: {par:.2f} (resolution: {numerator}×{denominator})")
+    _, first_frame = cap.read()
+    print(first_frame.shape)
     selected_points = []
     selected_count = 0
 
-    cv2.namedWindow("Select eight points: center, two rotating points, two horizontal movers, and two vertical movers")
+    cv2.namedWindow("Select eight points: center, two rotating points, two horizontal movers, and two vertical movers",  cv2.WINDOW_NORMAL)
     cv2.setMouseCallback("Select eight points: center, two rotating points, two horizontal movers, and two vertical movers", select_pixel)
 
     while selected_count < 7:
         cv2.imshow("Select eight points: center, two rotating points, two horizontal movers, and two vertical movers", first_frame)
+        cv2.resizeWindow("Select eight points: center, two rotating points, two horizontal movers, and two vertical movers", int(0.9*first_frame.shape[1]), first_frame.shape[0])
         cv2.waitKey(20)
 
     center, rotating_point1, rotating_point2, mover_h1, mover_h2, mover_v1, mover_v2 = selected_points[0], selected_points[1], selected_points[2], selected_points[3], selected_points[4], selected_points[5], selected_points[6]

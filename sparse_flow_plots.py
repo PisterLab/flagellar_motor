@@ -13,7 +13,6 @@ def select_pixel(event, x, y, flags, param):
         selected_points.append((x, y))
         selected_count += 1
 
-def main():
     global selected_points, selected_count
 
     root = tk.Tk()

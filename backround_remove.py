@@ -19,7 +19,7 @@ def colorConvert(image):
 # %%
 def get_motion_ROI(cap: cv.VideoCapture, visualize = False):
   """Returns an region of interest ROI to look for good points to track by removing video average """
-  frame_get = cap.get(cv.CAP_PROP_FRAME_COUNT) * np.random.uniform(size = 30)
+  frame_get = max(cap.get(cv.CAP_PROP_FRAME_COUNT), 200) * np.random.uniform(size = 45)
   frames = []
   for i in frame_get:
     cap.set(cv.CAP_PROP_POS_FRAMES, i)
@@ -35,14 +35,14 @@ def get_motion_ROI(cap: cv.VideoCapture, visualize = False):
   ret,th = cv.threshold(bg_removed_frame,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
   ret2,th2 = cv.threshold(bg_removed_frame,ret*0.9,255, cv.THRESH_BINARY)
   kernel = np.ones((5,5),np.uint8)
+  dilated = cv.morphologyEx(th2, cv.MORPH_OPEN, kernel)
   dilated = cv.dilate(th2, kernel, iterations=5)
-  dilated = cv.morphologyEx(dilated, cv.MORPH_OPEN, kernel)
+  # dilated = cv.morphologyEx(dilated, cv.MORPH_OPEN, kernel)
+
   if visualize:
     plt.imshow(colorConvert(bg_removed_frame))
     plt.imshow(colorConvert(dilated))
   return dilated
-
-
 
 # %%
 def main():
@@ -58,3 +58,4 @@ def main():
 # %%
 if __name__ == '__main__':
   main()
+# %%

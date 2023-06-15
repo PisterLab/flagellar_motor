@@ -6,13 +6,12 @@ from tkinter import filedialog
 from math import sqrt, atan2, degrees
 import csv
 import matplotlib.pyplot as plt
-
-def select_pixel(event, x, y, flags, param):
-    global selected_points, selected_count
-    if event == cv2.EVENT_LBUTTONDOWN:
-        selected_points.append((x, y))
-        selected_count += 1
-
+def main():
+    def select_pixel(event, x, y, flags, param):
+        global selected_points, selected_count
+        if event == cv2.EVENT_LBUTTONDOWN:
+            selected_points.append((x, y))
+            selected_count += 1
     global selected_points, selected_count
 
     root = tk.Tk()

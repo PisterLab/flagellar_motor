@@ -19,7 +19,7 @@ def colorConvert(image):
 # %%
 def get_motion_ROI(cap: cv.VideoCapture, visualize = False):
   """Returns an region of interest ROI to look for good points to track by removing video average """
-  frame_get = max(cap.get(cv.CAP_PROP_FRAME_COUNT), 200) * np.random.uniform(size = 45)
+  frame_get = max(cap.get(cv.CAP_PROP_FRAME_COUNT), 100) * np.random.uniform(size = 30)
   frames = []
   for i in frame_get:
     cap.set(cv.CAP_PROP_POS_FRAMES, i)

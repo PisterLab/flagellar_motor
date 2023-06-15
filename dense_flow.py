@@ -28,7 +28,7 @@ def dense_flow_on_video(video_file):
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         cv.calcOpticalFlowFarneback(prev_gray, gray, 
                                        flow,
-                                       0.5, 3, 15, 3, 5, 1.1, 0) 
+                                       0.5, 4, 15, 4, 5, 1.1, 0) 
         vel[...,frame_ind] = flow  
         prev_gray = gray 
     cap.release()
@@ -130,7 +130,7 @@ def segment_watershed(gray, display=False, img = None):
             )
         coins.append(contours[0])
         areas.append(area)
-    args = np.argsort(areas)
+    args = np.flip(np.argsort(areas))
     out_labels = labels[2:][args]
     out_areas = np.array(areas)[args.astype(int)]
 

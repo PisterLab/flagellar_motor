@@ -19,7 +19,7 @@ def main():
         basename_without_ext = os.path.splitext(os.path.basename(video_file))[0]
         write_fname = os.path.join(directory, basename_without_ext+'.npy')
         with open(write_fname, "wb") as f:
-            np.save(f, flow.astype(np.int8))
+            np.save(f, flow.astype(np.float16))
 if __name__ == '__main__':
     main()
 # %%

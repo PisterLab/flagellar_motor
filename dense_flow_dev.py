@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 # vel, pixel_ar = dense_flow.dense_flow_on_video(video_file)
 
 # %%
-# flow_file = '../../Probe tests/20220222/E9V5.1h/1 50V 250Ms 2023-02-22-213053-0004.npy'
-flow_file = './test.npy'
+flow_file = '../../Probe tests/20220222/E9V5.1h/1 50V 250Ms 2023-02-22-213053-0004.npy'
+# flow_file = './test.npy'
 with open(flow_file, 'rb') as f:
     vel = np.load(f, allow_pickle = True)
 # %%
@@ -48,7 +48,7 @@ def compute_velocity(flow : np.ndarray, cap: cv.VideoCapture,
     filtered_vel = np.ma.masked_array(flow, mask2, dtype = np.float16) ## dimensions are width, height, (x or y), time
     avg_vel = filtered_vel.mean(axis = (0,1)) #average over time 
     indices = np.argwhere(mask == False)
-    idx0 = tuple(indices[len(indices)//2])
+    idx0 = tuple(indices[len(indices)//3])
     vel0 = filtered_vel[idx0[0], idx0[1], :,:]
     dif_vel = filtered_vel - vel0[None, None, ...]
     X,Y = np.meshgrid(range(flow.shape[1]), range(flow.shape[0]))
@@ -71,10 +71,12 @@ def compute_velocity(flow : np.ndarray, cap: cv.VideoCapture,
             fig.set_figheight(10)
             fig.set_figwidth(10)
             fig.suptitle(f'frame{frame_num}')
-            ax[0,0].quiver(difX[::sparse, ::sparse]*0.9,difY[::sparse, ::sparse], this_vel[::sparse,::sparse,0], this_vel[::sparse,::sparse,1], scale =100)
+            ax[0,0].quiver(difX[::sparse, ::sparse]*0.9,difY[::sparse, ::sparse], this_vel[::sparse,::sparse,0]*0.9, this_vel[::sparse,::sparse,1], scale =100)
             ax[1,0].quiver(rel_vel[::sparse,::sparse,0], rel_vel[::sparse,::sparse,1],scale =100)
-            ax[0,1].scatter(-difY[::sparse, ::sparse], -rel_vel[::sparse,::sparse,0]*0.9)
-            ax[0,1].scatter(difX[::sparse, ::sparse]*0.9, rel_vel[::sparse,::sparse,1])
+            # ax[0,1].scatter(difY[::sparse, ::sparse], -rel_vel[::sparse,::sparse,0]*0.9)
+            # ax[0,1].scatter(difX[::sparse, ::sparse]*0.9, rel_vel[::sparse,::sparse,1])
+            ax[0,1].scatter(difY, -rel_vel[...,0]*0.9, s=1)
+            ax[0,1].scatter(difX, rel_vel[...,1], s=1)
             ax[0,1].scatter([0,0], avg_vel[:, frame_num])
             ax[1,1].scatter(-difY[::sparse, ::sparse], this_vel[::sparse,::sparse,0])
             ax[1,1].scatter(difX[::sparse, ::sparse], this_vel[::sparse,::sparse,1])

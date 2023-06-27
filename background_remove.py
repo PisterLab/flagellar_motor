@@ -25,7 +25,6 @@ def get_motion_ROI(cap: cv.VideoCapture, visualize = False):
     cap.set(cv.CAP_PROP_POS_FRAMES, i)
     ret, frame = cap.read()
     frames.append(frame)
-  cap.release()
   frame_avg = np.average(frames, axis = 0).astype(dtype = np.uint8)
   gray_frame_avg = cv.cvtColor(frame_avg, cv.COLOR_BGR2GRAY)
   frame_sample = frames[0]
@@ -53,7 +52,7 @@ def main():
       print("No video file selected.")
   cap = cv.VideoCapture(video_file)
   roi = get_motion_ROI(cap, True)
-
+  cap.release()
 
 # %%
 if __name__ == '__main__':

@@ -28,7 +28,7 @@ def dense_flow_on_video(video_file):
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         cv.calcOpticalFlowFarneback(prev_gray, gray, 
                                        flow,
-                                       0.5, 4, 15, 4, 5, 1.1, 0) 
+                                       0.5, 4, 30, 4, 5, 1.1, 0) 
         vel[...,frame_ind] = flow  
         prev_gray = gray 
     cap.release()

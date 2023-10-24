@@ -24,20 +24,6 @@ root.withdraw()
 
 csv_file = filedialog.askopenfilenames(filetypes=[("CSV files", "*.csv")])[0]
 
-# %% 
-directory = os.path.dirname(csv_file)
-fname = os.path.basename(csv_file).split('/')[-1]
-# %%
-df = pd.read_csv(csv_file)
-# %%
-time_cols = [col for col in df if col.startswith('Time')]
-# %%
-
-# for time_col_name in time_cols[0:1]:
-#     time = df[time_col_name]
-#     angle = df.iloc[df.columns.get_indexer(time_col_name)]
-# %%
-
 
 
 
@@ -49,47 +35,151 @@ def get_design_parameter(dev, parameter):
 
 # %% test parameters for different functions
 
-# %%
-dev = fname.split('.')[0]
 
 
-# %%
-def get_step_size(step_indxs, time, angle, plot = False):
-    """ computes step size"""
-    angled_steps = angle[step_indxs]
-    step_sizes = np.diff(angled_steps)
-    fig = None
-    fig2 = None
-    if plot:
-        fig2, ax = plt.subplots()
-        ax.hist(np.diff(angle[step_indxs]))
-        ax.set_xlabel('Step size(degrees)')
-    return step_sizes, [fig, fig2]
 
 
-def differentiate(time, angle, plot = False):
-    """discrete derivative for step sizes0"""
-    dangle = np.diff(angle)
-    if plot:
-        plt.plot(time[0:-1], dangle)
-    return dangle
+# %% 
+class AngularDataPr():
+    """
+    Class to process csv files with angular data (and down the line linear data)
 
-def find_step_indexes(time, angle, thresh = 0.1, plot = False):
-    """returns the locations in which steps occur"""
-    steps = differentiate(time, angle, False)
-    indxs = np.where(np.abs(steps)>= thresh)[0]
-    fig = None
-    fig2 = None
-    if plot:
+    Attributes
+    ----------
+    csv_file: file_path to csv file containing motion data
+    directory: directory path were csv file (and usually mp4 files) are located
+    fname: just the base file name without directory data
+    data: pandas dataframe with csvdata
+    time_cols: column headers starting with time
+    device_name: obtained from fname, contains chip ID and device ID
+    """
+
+    def __init__(self, csv_file):
+        """
+        Parameters
+        ----------
+        csv_file: file path to csv file containing columns for time, angle, and (sometimes) x and y motion
+
+        """
+        self.csv_file = csv_file
+        self.directory = os.path.dirname(csv_file)
+        self.fname = os.path.basename(csv_file).split('/')[-1]
+        self.data = pd.read_csv(csv_file)
+        self.time_cols = [col for col in self.data if col.startswith('Time')]
+        self.device_name = self.fname.split('.')[0]
+    def find_step_indexes(self, time_ind:int,  thresh= 0.1):
+        """
+        Computes and returns locations for steps
+        Parameters
+        ----------
+        time_ind: index for which time column to do this for 
+        thresh: threshold to consider an amount of motion a step 
+        """
+        time = self.data[self.time_cols[time_ind]]
+        angle = self.data.iloc[:,self.data.columns.get_loc(self.time_cols[time_ind])+1]
+        steps = np.diff(angle)
+        indxs = np.where(np.abs(steps)>= thresh)[0]
+        
+        # else: 
+        #     fig = None
+        return indxs, time[indxs]
+    # def find_step_sizes(self, time_ind, thresh = 0.1):
+
+
+    # def get_step_size(self):
+    #     """ computes step sizes"""
+    #     angled_steps = angle[step_indxs]
+    #     step_sizes = np.diff(angled_steps)
+    #     fig = None
+    #     fig2 = None
+    #     if plot:
+    #         fig2, ax = plt.subplots()
+    #         ax.hist(np.diff(angle[step_indxs]))
+    #         ax.set_xlabel('Step size(degrees)')
+    #     return step_sizes, [fig, fig2]
+
+
+# def differentiate(time, angle, plot = False):
+#     """discrete derivative for step sizes0"""
+#     dangle = np.diff(angle)
+#     if plot:
+#         plt.plot(time[0:-1], dangle)
+#     return dangle
+
+class AngularDataSC():
+    """ Class to include the methods for every series of time vs angle (can include x and y in future)"""
+    def __init__(self, time, angle, step_thresh = 0.1):
+        """
+        Parameters
+        ----------
+        time: time series corresponding to angle 
+        angle: cummulative angle steps
+        step_thresh: threshold for steps later
+        """
+        self.time = time
+        self.angle = angle
+        self.step_thresh = step_thresh 
+        self.figs = {}
+    def find_step_indexes(self):
+        steps = np.diff(self.angle)
+        self.step_indxs = np.where(np.abs(steps)>= self.step_thresh)[0]
+        self.step_periods = np.diff(self.time[self.step_indxs])
+        # if plot:
+        #     fig, ax = plt.subplots()
+        #     ax.plot(self.time, self.angle)
+        #     plt.vlines(x = time[self.step_indxs], ymin = 0, ymax = np.max(self.angle), colors = 'gray')
+        #     fig2, ax = plt.subplots()
+        #     ax.hist(np.diff(time[self.step_indxs]))
+        #     ax.set_xlabel('Step time (s)')
+        #     self.figs['Step time'] = fig
+        #     self.figs['']
+        return self.step_indxs
+    def find_step_sizes(self):
+        """Must be called after finding step_indxs"""
+        angled_steps = self.angle[self.step_indxs]
+        self.step_sizes = np.diff(angled_steps)
+        return self.step_sizes
+    def linear_regression(self, force_intcpt = False):
+        """ Computes the speed using linear regression
+        Parameters
+        ----------
+        force_intcp: if True sets intercept at 0
+        """
+        time = self.time
+        angle = self.angle
+        if not force_intcpt:
+            A = np.vstack([time, np.ones(len(time))]).T
+            slope, intercept = np.linalg.lstsq(A, angle, rcond = None)[0]
+        else:
+            A = time[:, np.newaxis]
+            slope = np.linalg.lstsq(A, angle, rcond = None)[0][0]
+            intercept = 0
+        self.speed_slope = slope
+        self.lin_reg_intcpt = intercept
+        return slope, intercept 
+    def average_speed(self):
+        """
+        Computes average speed simply delta angle/ delta time
+        """
+        self.average_speed = (self.angle[-1]- self.angle[0])/(self.time[-1] - self.time[0])
+        return self.average_speed
+    def visualize(self):
+        """ Produces plots to visualize computation"""
+        # show time vs angle with speed and steps 
         fig, ax = plt.subplots()
-        ax.plot(time, angle)
-        plt.vlines(x = time[indxs], ymin = 0, ymax = np.max(angle), colors = 'gray')
-        fig2, ax = plt.subplots()
-        ax.hist(np.diff(time[indxs]))
-        ax.set_xlabel('Step time (s)')
-    else: 
-        fig = None
-    return indxs, time[indxs], [fig, fig2]
+        fig2, ax2 = plt.subplots(2,2)
+        ax.plot(self.time, self.angle)
+        if hasattr(self, 'step_indxs'):
+            ax.vlines(x = self.time[self.step_indxs], ymin = 0, 
+                      ymax = np.max(self.angle), colors = 'gray')
+            ax2[0].hist(self.step_periods)
+        if hasattr(self, 'step_sizes'):
+            ax2[1].hist(step_sizes)
+            ax2[2].scatter(self.step_periods, self.step_sizes)
+        if hasattr(self, 'speed_slope'):
+            ax.plot(self.time, self.time*self.speed_slope + self.lin_reg_intcpt, '-')
+    
+
 
 def linear_Regression(time,angle, force_intcpt = False, plot =False):
     """ computes speed based on linear regression of value"""
@@ -108,7 +198,6 @@ def linear_Regression(time,angle, force_intcpt = False, plot =False):
         ax.set_ylabel('Angle (degrees)')
 
     return slope, intercept, fig
-
 # %%
 time_diff_list = []
 step_size_list = []
@@ -201,11 +290,7 @@ plt.hist(step_times)
 
 
 # %% Export as 
-import tikzplotlib
-tikzplotlib.save(os.path.join(directory,'speed_v_voltage.tex'), figure =  fig)
-# # %%
-
+# import tikzplotlib
+# tikzplotlib.save(os.path.join(directory,'speed_v_voltage.tex'), figure =  fig)
 # %%
 
-
-# %%

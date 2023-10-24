@@ -8,7 +8,6 @@ from math import sqrt, atan2, degrees
 import csv
 import matplotlib.pyplot as plt
 from IPython.display import Image, display
-import background_remove
 import os
 import pandas as pd
 
@@ -43,24 +42,25 @@ def process_video_sparse(video_file):
 
     prev_gray = cv.cvtColor(first_frame, cv.COLOR_BGR2GRAY)
     img = first_frame.copy()
-    corners = cv.goodFeaturesToTrack(prev_gray,100,0.03,50)
-    corners = np.int0(corners)
-    for i in corners:
-        x,y = i.ravel()
-        cv.circle(img,(x,y),10,255,-1)
-    imshow(img)
-
-
-    img = first_frame.copy()
-    # mask = background_remove.get_motion_ROI(cap, True)
-    r = cv.selectROI("select roi", img)
-    mask = np.zeros_like(prev_gray)
-    mask[int(r[1]):int(r[1]+r[3]), 
-                        int(r[0]):int(r[0]+r[2])] = 1
-    cv.destroyAllWindows()
     num_features = 1000
-    distance = 0.5* np.sqrt(r[3]**2 + r[2]**2)
-    corners = cv.goodFeaturesToTrack(prev_gray,num_features,0.001,10, mask= mask)
+    corners = cv.goodFeaturesToTrack(prev_gray,num_features,0.001,10)
+    corners = np.int0(corners)
+    # for i in corners:
+    #     x,y = i.ravel()
+    #     cv.circle(img,(x,y),10,255,-1)
+    # imshow(img)
+
+
+    # img = first_frame.copy()
+    # # mask = background_remove.get_motion_ROI(cap, True)
+    # r = cv.selectROI("select roi", img)
+    # mask = np.zeros_like(prev_gray)
+    # mask[int(r[1]):int(r[1]+r[3]), 
+    #                     int(r[0]):int(r[0]+r[2])] = 1
+    # cv.destroyAllWindows()
+    # num_features = 1000
+    # distance = 0.5* np.sqrt(r[3]**2 + r[2]**2)
+    # corners = cv.goodFeaturesToTrack(prev_gray,num_features,0.001,10, mask= mask)
     corners = np.int0(corners)
 
     # distance = int((r[2]*r[3]/num_features)**0.5)
@@ -79,9 +79,9 @@ def process_video_sparse(video_file):
     ret, old_frame = cap.read()
     old_gray = cv.cvtColor(old_frame, cv.COLOR_BGR2GRAY)
     p0 = np.float32(corners)
-    lk_params = dict( winSize  = (15, 15),
+    lk_params = dict( winSize  = (30, 30),
                   maxLevel = 15,
-                  criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,  100, 0.01))
+                  criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,  50, 0.005))
     # Create some random colors
     color = np.random.randint(0, 255, (num_features, 3))
     color2 = color[:,[2,0,1]]/255
@@ -177,9 +177,9 @@ def main():
     for video_file in video_files:
         directory = os.path.dirname(video_file)
         fname = os.path.basename(video_file).split('/')[-1]
-        wafer,chip,dev,delaytime, voltage = fname.split(' ')
-        voltage = voltage.split('V.mp4')[0]
-        thetas, tanslation, time = process_video_sparse(video_file)
+        wafer,chip,dev,delaytime, voltage = fname.split('_')
+        voltage = voltage.split('V.')[0]
+        thetas, translation, time = process_video_sparse(video_file)
         fig, ax = plt.subplots()
         ax.plot(time, 180/np.pi * np.cumsum(thetas))
         ax.scatter(time, 180/np.pi * np.cumsum(thetas))
@@ -187,18 +187,24 @@ def main():
         ax.set_ylabel('Angular displacement (degrees)')
         fig.savefig(video_file + '.png')
         ax.set_title(video_file)
-        data = {f'Time {voltage}V {delaytime} ms': time,f'theta {voltage}V {delaytime} ms':180/np.pi * np.cumsum(thetas) }
-        df = pd.read_csv(os.path.join(directory,'Combined_data.csv'))
-        df2 = pd.DataFrame(data = data)
+        data = {f'Time {voltage}V {delaytime} ms': time,
+                f'theta {voltage}V {delaytime} ms':180/np.pi * np.cumsum(thetas),
+                 f'translation x {voltage}V {delaytime} ms': translation[:,0],
+                   f'translation y {voltage}V {delaytime} ms': translation[:,1]  }
+        try:
+            df = pd.read_csv(os.path.join(directory,f'{wafer}_{chip}_{dev}.csv'))
+        except FileNotFoundError:
+            df = pd.DataFrame()
         for key,value in data.items():
             df[key] = value
         # df_new = pd.concat([df,df2], axis = 1)
-        df.to_csv(os.path.join(directory,'Combined_data.csv'))
+        df.to_csv(os.path.join(directory,f'{wafer}_{chip}_{dev}.csv'))
         # flow, _ = dense_flow.dense_flow_on_video(video_file)
         # basename_without_ext = os.path.splitext(os.path.basename(video_file))[0]
         # write_fname = os.path.join(directory, basename_without_ext+'.npy')
         # with open(write_fname, "wb") as f:
         #     np.save(f, flow.astype(np.float16))
+# %%
 if __name__ == '__main__':
     main()
 # %%

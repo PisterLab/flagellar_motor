@@ -67,22 +67,83 @@ class AngularDataPr():
         self.data = pd.read_csv(csv_file)
         self.time_cols = [col for col in self.data if col.startswith('Time')]
         self.device_name = self.fname.split('.')[0]
-    def find_step_indexes(self, time_ind:int,  thresh= 0.1):
-        """
-        Computes and returns locations for steps
-        Parameters
-        ----------
-        time_ind: index for which time column to do this for 
-        thresh: threshold to consider an amount of motion a step 
-        """
-        time = self.data[self.time_cols[time_ind]]
-        angle = self.data.iloc[:,self.data.columns.get_loc(self.time_cols[time_ind])+1]
-        steps = np.diff(angle)
-        indxs = np.where(np.abs(steps)>= thresh)[0]
+    def get_time_angle(self, i):
+        """ Returns the time and angle data for index i"""
+        time = self.data[self.time_cols[i]]
+        angle = self.data.iloc[:,self.data.columns.get_loc(self.time_cols[i])+1]
+        return time, angle
+    
+    def process_all(self, time_correction_factor = 1, visualize = False):
+        self.single_processors = []
+        for i, time_col in enumerate(self.time_cols):
+            time,angle = self.get_time_angle(i)
+            time = time_correction_factor*time
+            angular_sc = AngularDataSC(time, angle)
+            angular_sc.compute_all()
+            angular_sc.metadata_from_column_name(time_col)
+            self.single_processors.append(angular_sc)
+            if visualize:
+                angular_sc.visualize()
+
+    def save_FOMS(self):
+        self.summary_data = pd.DataFrame(columns = [
+            'delay time', 
+            'nom_voltage',
+            'average_speed', 
+            'reg_speed',
+            'avg_step_size',
+            'median_step_size',
+            'std_step_size',
+            'avg_step_period',
+            'median_step_period',
+            'std_step_period'])
+        for i in range(len(self.single_processors)):
+            angular_sc = self.single_processors[i] #type: AngularDataSC
+            delay = angular_sc.delay
+            nom_voltage = angular_sc.nominal_voltage
+            average_speed = angular_sc.average_speed
+            reg_speed = angular_sc.speed_slope
+            step_sizes = angular_sc.step_sizes
+            avg_step_size = np.mean(step_sizes)
+            median_step_size = np.median(step_sizes)
+            std_step_size = np.std(step_sizes)
+            step_periods = angular_sc.step_periods
+            avg_step_period = np.mean(step_periods)
+            median_step_period = np.median(step_periods)
+            std_step_period = np.std(step_periods)
+            this_dict = {
+            'delay time': delay, 
+            'nom_voltage': nom_voltage,
+            'average_speed': average_speed, 
+            'reg_speed': reg_speed,
+            'avg_step_size': avg_step_size,
+            'median_step_size': median_step_size,
+            'std_step_size': std_step_size,
+            'avg_step_period': avg_step_period,
+            'median_step_period': median_step_period,
+            'std_step_period': std_step_period
+            }           
+            
+            self.summary_data.loc[i] = list(this_dict.values()) 
+            print(i)
+            
+
+    # def find_step_indexes(self, time _ind:int,  thresh= 0.1):
+    #     """
+    #     Computes and returns locations for steps
+    #     Parameters
+    #     ----------
+    #     time_ind: index for which time column to do this for 
+    #     thresh: threshold to consider an amount of motion a step 
+    #     """
+    #     time = self.data[self.time_cols[time_ind]]
+    #     angle = self.data.iloc[:,self.data.columns.get_loc(self.time_cols[time_ind])+1]
+    #     steps = np.diff(angle)
+    #     indxs = np.where(np.abs(steps)>= thresh)[0]
         
-        # else: 
-        #     fig = None
-        return indxs, time[indxs]
+    #     # else: 
+    #     #     fig = None
+    #     return indxs, time[indxs]
     # def find_step_sizes(self, time_ind, thresh = 0.1):
 
 
@@ -116,10 +177,15 @@ class AngularDataSC():
         angle: cummulative angle steps
         step_thresh: threshold for steps later
         """
-        self.time = time
-        self.angle = angle
+        self.time = np.array(time)
+        self.angle = np.array(angle)
         self.step_thresh = step_thresh 
         self.figs = {}
+    def compute_all(self):
+        self.find_step_indexes()
+        self.find_step_sizes()
+        self.linear_regression()
+        self.get_average_speed()
     def find_step_indexes(self):
         steps = np.diff(self.angle)
         self.step_indxs = np.where(np.abs(steps)>= self.step_thresh)[0]
@@ -157,135 +223,177 @@ class AngularDataSC():
         self.speed_slope = slope
         self.lin_reg_intcpt = intercept
         return slope, intercept 
-    def average_speed(self):
+    def get_average_speed(self):
         """
         Computes average speed simply delta angle/ delta time
         """
         self.average_speed = (self.angle[-1]- self.angle[0])/(self.time[-1] - self.time[0])
         return self.average_speed
+    def load_metadata(self, nominal_voltage, delay, shuttle_radius = None, expected_step_size = None ):
+        self.nominal_voltage = nominal_voltage
+        self.delay = delay
+        if shuttle_radius:
+            self.shuttle_radius = shuttle_radius
+        if expected_step_size:
+            self.expected_step = expected_step_size
+    def metadata_from_column_name(self, column_name:str):
+        self.nominal_voltage = int([v for v in column_name.split(' ') if 'V' in v][0].split('V')[0])
+        try:
+            delay = float([v for v in column_name.split(' ') if 'ms' in v][0].split('ms')[0])
+        except ValueError:
+            delay = float([v for v in column_name.split(' ') if 'Ms' in v][0].split('Ms')[0])
+        self.delay = delay
+
+
     def visualize(self):
         """ Produces plots to visualize computation"""
         # show time vs angle with speed and steps 
-        fig, ax = plt.subplots()
-        fig2, ax2 = plt.subplots(2,2)
+        fig, ax = plt.subplots(figsize=(5,5))
+        fig2, ax2 = plt.subplots(2,2, figsize = (10,8))
         ax.plot(self.time, self.angle)
         if hasattr(self, 'step_indxs'):
             ax.vlines(x = self.time[self.step_indxs], ymin = 0, 
                       ymax = np.max(self.angle), colors = 'gray')
-            ax2[0].hist(self.step_periods)
+            period_bins, period_freqs, _ = ax2[0,0].hist(self.step_periods)
         if hasattr(self, 'step_sizes'):
-            ax2[1].hist(step_sizes)
-            ax2[2].scatter(self.step_periods, self.step_sizes)
+            ax2[0,1].hist(self.step_sizes)
+            ax2[1,1].scatter(self.step_periods, self.step_sizes)
         if hasattr(self, 'speed_slope'):
             ax.plot(self.time, self.time*self.speed_slope + self.lin_reg_intcpt, '-')
-    
-
-
-def linear_Regression(time,angle, force_intcpt = False, plot =False):
-    """ computes speed based on linear regression of value"""
-    if not force_intcpt:
-        A = np.vstack([time, np.ones(len(time))]).T
-        slope, intercept = np.linalg.lstsq(A, angle, rcond = None)[0]
-    else:
-        A = time[:, np.newaxis]
-        slope = np.linalg.lstsq(A, angle, rcond = None)[0][0]
-        intercept = 0
-    if plot:
-        fig, ax = plt.subplots()
-        ax.plot(time, angle)
-        ax.plot(time, time*slope + intercept)
+        if hasattr(self, 'nominal_voltage'):
+            fig.suptitle(f'Nominal {self.nominal_voltage}: V with delay = {self.delay}')
+            ax2[0,0].vlines(x=[2*self.delay *1e-3], ymin = 0, ymax =period_freqs.max(), color = 'black' )
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Angle (degrees)')
+        ax2[0,0].set_xlabel('Step period (s)')
+        ax2[0,1].set_xlabel('Step size (degrees)')
+        ax2[1,1].set_xlabel('Step period (s)')    
+        ax2[1,1].set_ylabel('Step size (degrees)')
+        self.figs = {'Motion': fig, 'Step distributions': fig2}
 
-    return slope, intercept, fig
-# %%
-time_diff_list = []
-step_size_list = []
-fig, ax = plt.subplots()
-hist_bins = 1/41.25*np.arange(0, 50, 2)
-slopes = []
-intercepts = []
-for i in range(0,len(time_cols)):
-    time_correction_factor = 30/41.25
-    indx, time, figs = find_step_indexes(df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True, thresh = 0.2)
-    step_sizes, _ = get_step_size(indx,df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True )
-    step_size_list.append(step_sizes)
-    slope, intercept, _ = linear_Regression(df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True, force_intcpt = False)
-    slopes.append(slope)
-    time_diffs = np.diff(time)
-    fig2, ax2 = plt.subplots()
-    ax2.scatter(time_diffs, step_sizes)
-    filtered_time_diffs = time_diffs[np.logical_and(time_diffs<0.5,time_diffs>1/41.25)]
-    time_diff_list.append(time_diffs)
-    ax.hist(filtered_time_diffs, bins = hist_bins,  density= True, rwidth =0.8)
-# %% get medians for step sizes
-step_sizes_meds= []
-nominal_Vs = []
-nominal_delays = []
-corresponding_step_times = []
-for i in range(0,len(time_cols)):
-    nominal_V = int([v for v in time_cols[i].split(' ') if 'V' in v][0].split('V')[0])
-    nominal_Vs.append(nominal_V)
-    try:
-        delay = float([v for v in time_cols[i].split(' ') if 'ms' in v][0].split('ms')[0])
-    except ValueError:
-        delay = float([v for v in time_cols[i].split(' ') if 'Ms' in v][0].split('Ms')[0])
-    nominal_delays.append(delay)
-    sizes = step_size_list[i]
-    med = np.median(sizes)
-    step_sizes_meds.append(med)
-# %% step size vs voltage
-rad = get_design_parameter(dev, 'shuttle_ro')
-fig, ax = plt.subplots()
-ax.scatter(nominal_Vs, step_sizes_meds)
-ax.set_xlabel('Input Voltage (V) (nominal)')
-ax.set_ylabel('Median step size (degrees)')
-secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
-secax.set_ylabel('Median step size (um)')
-
-# %% moving slope vs voltage
-fig, ax = plt.subplots()
-ax.scatter(nominal_Vs, slopes)
-ax.set_xlabel('Input Voltage (V) (nominal)')
-ax.set_ylabel('Angular velocity(degrees/s)')
-secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
-secax.set_ylabel('Linear speed (um/s)')
-
-# %% moving speed vs delay
-fig, ax = plt.subplots()
-nominal_delays = np.array(nominal_delays)
-
-slopes = np.array(slopes)
-
-unique_Vs = set(nominal_Vs)
-for volts in unique_Vs:
-    filtered_inds = [int(i) for i in range(len(nominal_Vs)) if nominal_Vs[i] == volts]
-    ax.scatter(nominal_delays[filtered_inds], slopes[filtered_inds])
-ax.set_xlabel('Delay time (s)')
-ax.set_ylabel('Angular velocity(degrees/s)')
-secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
-secax.set_ylabel('Linear speed (um/s)')
 
 # %% 
 
-# %% moving speed vs delay
-fig, ax = plt.subplots()
-nominal_delays = np.array(nominal_delays)
-
-slopes = np.array(slopes)
-
-unique_Vs = set(nominal_Vs)
-for volts in unique_Vs:
-    filtered_inds = [int(i) for i in range(len(nominal_Vs)) if nominal_Vs[i] == volts]
-    ax.scatter(1000*0.5/nominal_delays[filtered_inds], slopes[filtered_inds])
-ax.set_xlabel('Step Frequency (Hz)')
-ax.set_ylabel('Angular velocity(degrees/s)')
-secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
-secax.set_ylabel('Linear speed (um/s)')
+processor = AngularDataPr(csv_file)
+time_correction_factor =30/41.25
+processor.process_all(time_correction_factor=time_correction_factor, visualize = True)
+processor.save_FOMS()
 # %%
-step_times = np.concatenate(time_diff_list).flatten()
-step_times = step_times[step_times<0.25]
-plt.hist(step_times)
+# for i in range(0,len(processor.time_cols)):
+#     time_correction_factor = 30/41.25
+#     time,angle = processor.get_time_angle(i)
+#     time = time_correction_factor*time
+#     subprocessor = AngularDataSC(time, angle, 0.1)
+
+#     subprocessor.compute_all()
+#     subprocessor.metadata_from_column_name(processor.time_cols[i])
+#     subprocessor.visualize()
+
+# def linear_Regression(time,angle, force_intcpt = False, plot =False):
+#     """ computes speed based on linear regression of value"""
+#     if not force_intcpt:
+#         A = np.vstack([time, np.ones(len(time))]).T
+#         slope, intercept = np.linalg.lstsq(A, angle, rcond = None)[0]
+#     else:
+#         A = time[:, np.newaxis]
+#         slope = np.linalg.lstsq(A, angle, rcond = None)[0][0]
+#         intercept = 0
+#     if plot:
+#         fig, ax = plt.subplots()
+#         ax.plot(time, angle)
+#         ax.plot(time, time*slope + intercept)
+#         ax.set_xlabel('Time (s)')
+#         ax.set_ylabel('Angle (degrees)')
+
+#     return slope, intercept, fig
+# %%
+# time_diff_list = []
+# step_size_list = []
+# fig, ax = plt.subplots()
+# hist_bins = 1/41.25*np.arange(0, 50, 2)
+# slopes = []
+# intercepts = []
+# for i in range(0,len(time_cols)):
+#     time_correction_factor = 30/41.25
+#     indx, time, figs = find_step_indexes(df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True, thresh = 0.2)
+#     step_sizes, _ = get_step_size(indx,df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True )
+#     step_size_list.append(step_sizes)
+#     slope, intercept, _ = linear_Regression(df[time_cols[i]]*time_correction_factor, df.iloc[:,df.columns.get_loc(time_cols[i])+1], plot = True, force_intcpt = False)
+#     slopes.append(slope)
+#     time_diffs = np.diff(time)
+#     fig2, ax2 = plt.subplots()
+#     ax2.scatter(time_diffs, step_sizes)
+#     filtered_time_diffs = time_diffs[np.logical_and(time_diffs<0.5,time_diffs>1/41.25)]
+#     time_diff_list.append(time_diffs)
+#     ax.hist(filtered_time_diffs, bins = hist_bins,  density= True, rwidth =0.8)
+# %% get medians for step sizes
+# step_sizes_meds= []
+# nominal_Vs = []
+# nominal_delays = []
+# corresponding_step_times = []
+# for i in range(0,len(time_cols)):
+#     nominal_V = int([v for v in time_cols[i].split(' ') if 'V' in v][0].split('V')[0])
+#     nominal_Vs.append(nominal_V)
+#     try:
+#         delay = float([v for v in time_cols[i].split(' ') if 'ms' in v][0].split('ms')[0])
+#     except ValueError:
+#         delay = float([v for v in time_cols[i].split(' ') if 'Ms' in v][0].split('Ms')[0])
+#     nominal_delays.append(delay)
+#     sizes = step_size_list[i]
+#     med = np.median(sizes)
+#     step_sizes_meds.append(med)
+# # %% step size vs voltage
+# rad = get_design_parameter(dev, 'shuttle_ro')
+# fig, ax = plt.subplots()
+# ax.scatter(nominal_Vs, step_sizes_meds)
+# ax.set_xlabel('Input Voltage (V) (nominal)')
+# ax.set_ylabel('Median step size (degrees)')
+# secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
+# secax.set_ylabel('Median step size (um)')
+
+# # %% moving slope vs voltage
+# fig, ax = plt.subplots()
+# ax.scatter(nominal_Vs, slopes)
+# ax.set_xlabel('Input Voltage (V) (nominal)')
+# ax.set_ylabel('Angular velocity(degrees/s)')
+# secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
+# secax.set_ylabel('Linear speed (um/s)')
+
+# # %% moving speed vs delay
+# fig, ax = plt.subplots()
+# nominal_delays = np.array(nominal_delays)
+
+# slopes = np.array(slopes)
+
+# unique_Vs = set(nominal_Vs)
+# for volts in unique_Vs:
+#     filtered_inds = [int(i) for i in range(len(nominal_Vs)) if nominal_Vs[i] == volts]
+#     ax.scatter(nominal_delays[filtered_inds], slopes[filtered_inds])
+# ax.set_xlabel('Delay time (s)')
+# ax.set_ylabel('Angular velocity(degrees/s)')
+# secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
+# secax.set_ylabel('Linear speed (um/s)')
+
+# # %% 
+
+# # %% moving speed vs delay
+# fig, ax = plt.subplots()
+# nominal_delays = np.array(nominal_delays)
+
+# slopes = np.array(slopes)
+
+# unique_Vs = set(nominal_Vs)
+# for volts in unique_Vs:
+#     filtered_inds = [int(i) for i in range(len(nominal_Vs)) if nominal_Vs[i] == volts]
+#     ax.scatter(1000*0.5/nominal_delays[filtered_inds], slopes[filtered_inds])
+# ax.set_xlabel('Step Frequency (Hz)')
+# ax.set_ylabel('Angular velocity(degrees/s)')
+# secax = ax.secondary_yaxis('right', functions= (lambda x: x*np.pi/180 *rad, lambda y: y / (np.pi/180 *rad)))
+# secax.set_ylabel('Linear speed (um/s)')
+# # %%
+# step_times = np.concatenate(time_diff_list).flatten()
+# step_times = step_times[step_times<0.25]
+# plt.hist(step_times)
 # %% 
 
 

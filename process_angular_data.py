@@ -152,7 +152,7 @@ class AngularDataPr():
             xvals = subdata[primary_var]
             yvals = subdata[y_var]
             color = legend_colors[i, :-1].reshape(1,3)
-            pts = ax.scatter(xvals, yvals, c = color, label = sec_val )
+            pts = ax.scatter(xvals, yvals, color = color, label = sec_val )
             arts.append(pts)
 
         if xlabel is None:
@@ -164,7 +164,12 @@ class AngularDataPr():
 
         labels = [l.get_label() for l in arts]
 
-        ax.legend(arts, labels, title = legend_label)
+        # clset = set(zip(arts, labels))
+        # handles = [plt.plot([], color = c, ls = "", marker = 'o' )[0] for c, l in clset]
+        # labels = [l for c,l in clset]
+        
+        # ax.legend()
+        ax.legend(title = legend_label)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)

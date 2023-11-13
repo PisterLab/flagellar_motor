@@ -12,6 +12,7 @@ plt.style.use("ggplot")
 import os
 import pandas as pd
 import sys
+import matplotlib as mpl
 # %% 
 
 design_module_path = 'c:\\Users\\mbustamante\\Box Sync\\Research\\Flagellar Motor\\code\\rotary_inchworm'
@@ -67,6 +68,7 @@ class AngularDataPr():
         self.data = pd.read_csv(csv_file)
         self.time_cols = [col for col in self.data if col.startswith('Time')]
         self.device_name = self.fname.split('.')[0]
+        self.figs = []
     def get_time_angle(self, i):
         """ Returns the time and angle data for index i"""
         time = self.data[self.time_cols[i]]
@@ -87,7 +89,7 @@ class AngularDataPr():
 
     def save_FOMS(self):
         self.summary_data = pd.DataFrame(columns = [
-            'delay time', 
+            'delay_time', 
             'nom_voltage',
             'average_speed', 
             'reg_speed',
@@ -112,7 +114,7 @@ class AngularDataPr():
             median_step_period = np.median(step_periods)
             std_step_period = np.std(step_periods)
             this_dict = {
-            'delay time': delay, 
+            'delay_time': delay, 
             'nom_voltage': nom_voltage,
             'average_speed': average_speed, 
             'reg_speed': reg_speed,
@@ -126,7 +128,50 @@ class AngularDataPr():
             
             self.summary_data.loc[i] = list(this_dict.values()) 
             print(i)
+        self.compute_frequency()
+    def compute_frequency(self):
+        """Adds a column for the frequency to the data structure """
+        delay_time = self.summary_data['delay_time']
+        frequency = 1/(4*delay_time*1e-3)
+        self.summary_data['frequency'] = frequency
+    def plot_FOMS(
+            self,y_var, primary_var = 'nom_voltage', secondary_var = 'delay_time', 
+            xlabel = None, ylabel =None, legend_label = None,
+            colormap = mpl.cm.get_cmap('viridis')
+            ):
+        """ plots figure of merits, with primary var as x axis, secondary var as legend"""
+        if not hasattr(self, 'summary_data'):
+            raise Exception('Call save_FOMS() before this function')
             
+        secondary_set = self.summary_data[secondary_var].unique()
+        legend_colors = colormap(np.linspace(0,1,len(secondary_set)))
+        fig, ax = plt.subplots()
+        arts = []
+        for i, sec_val in enumerate(secondary_set):
+            subdata = self.summary_data[self.summary_data[secondary_var] == sec_val]
+            xvals = subdata[primary_var]
+            yvals = subdata[y_var]
+            color = legend_colors[i, :-1].reshape(1,3)
+            pts = ax.scatter(xvals, yvals, c = color, label = sec_val )
+            arts.append(pts)
+
+        if xlabel is None:
+            xlabel = primary_var
+        if ylabel is None:
+            ylabel = y_var
+        if legend_label is None:
+            legend_label = secondary_var
+
+        labels = [l.get_label() for l in arts]
+
+        ax.legend(arts, labels, title = legend_label)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        self.figs.append(fig)
+
+
+
 
     # def find_step_indexes(self, time _ind:int,  thresh= 0.1):
     #     """
@@ -276,8 +321,17 @@ class AngularDataSC():
 
 processor = AngularDataPr(csv_file)
 time_correction_factor =30/41.25
-processor.process_all(time_correction_factor=time_correction_factor, visualize = True)
+processor.process_all(time_correction_factor=time_correction_factor, visualize = False)
 processor.save_FOMS()
+
+# %% 
+processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='delay_time')
+processor.plot_FOMS(y_var='reg_speed', primary_var='delay_time', secondary_var='nom_voltage')
+
+# %%
+
+processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='frequency')
+processor.plot_FOMS(y_var='reg_speed', primary_var='frequency', secondary_var='nom_voltage')
 # %%
 # for i in range(0,len(processor.time_cols)):
 #     time_correction_factor = 30/41.25

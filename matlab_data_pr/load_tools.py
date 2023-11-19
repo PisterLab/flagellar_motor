@@ -1,6 +1,6 @@
 # %% import files
 import scipy.io as sio
-from tkinter import filedialog
+from tkinter import filedialog, Tk
 import cv2 as cv
 import numpy as np
 from IPython.display import Image, display
@@ -16,6 +16,8 @@ import sys
 # %%
 
 def load_mat():
+    root = Tk()
+    root.withdraw()
     files = filedialog.askopenfilenames(filetypes=[("Mat files", "*.mat")])
     if not files:
         print("No files selected")

@@ -51,7 +51,16 @@ def process_matfile(out, file):
                 V_dev = data[i,j,k]['V_dev'][0][0]
                 V_rout = data[i,j,k]['V_rout'][0][0]
                 trigger = data[i,j,k]['trigger_signal'][0][0]
-                o_data[i,j,k] = pd.DataFrame(data = {'time': time[0,:], 'V_dev': V_dev[0,:], 'V_rout': V_rout[0,:], 'trigger': trigger[0,:]})
+
+                o_data[i,j,k] = pd.DataFrame(data = {
+                    'time': time[0,:], 'V_dev': V_dev[0,:], 'V_rout': V_rout[0,:], 'trigger': trigger[0,:]
+                    })
+                try:
+                    trigger2 = data[i,j,k]['trigger_signal2'][0][0]
+                    o_data[i,j,k]['trigger_B'] = trigger2[0,:]
+                except Exception as error:
+                    print(error)
+                    pass 
                 metadata['R_out'][i,j,k] = data[i,j,k]['R_out'][0][0][0,0]
                 metadata['V_in'][i,j,k] = data[i,j,k]['V_in'][0][0][0,0]
                 metadata['delay'][i,j,k] = data[i,j,k]['delay'][0][0][0,0]
@@ -64,7 +73,7 @@ def process_matfile(out, file):
 # %%
 out, files = load_mat()
 # %%
-for i, this_out in enumerate(out):
+for i, this_out in enumerate(out, start =6):
     processed = process_matfile(this_out, files[i])
     path,fname = os.path.split(files[i])
     name = fname.split('.mat')[0]

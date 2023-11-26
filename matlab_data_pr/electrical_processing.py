@@ -57,6 +57,15 @@ class TrialPr():
         self.light_level = light_level
         self.initial_num = initial_num
         self.set_size = set_size
+    def analyze(self):
+        #does a complete analysis of provided trial info
+        self.separate_data()
+        available_cats = list(self.hr_data.keys())
+        self.align_all_to_trigger()
+        self.detect_peak_current(available_cats, frac = 0.1, filter = self.well_triggered)
+        self.current_time_constant_est(available_cats, False, filter = self.well_triggered)
+        self.get_input_voltage(available_cats, [3e-5, self.delay/1000*0.75])
+        self.voltage_time_constant_est(['charge_A'], filter = self.well_triggered)
 
     def separate_data(self):
         """This separates data into different kinds of recordings"""
@@ -215,7 +224,7 @@ class TrialPr():
                         ax[0].plot(trial_data['time'], trial_data['V_rout'], color = colors[ind])
                         ax[1].plot(trial_data['time'], log_current, color = colors[ind])
                         ax[1].plot(t, Amatrix@res[0],'--', color = colors[ind])
-                    output.append((tau, y_intcp, res[1]))
+                    output.append((1/tau, y_intcp, res[1]))
                 else:
                     output.append((None, None, None))
             return output
@@ -252,20 +261,27 @@ class TrialPr():
                         output.append((None, None, None))
                         continue
                     t_min = range[1] + 0.25*(range[4]-range[1])
-                    time_window = (0, range[4]) # gets time window values for data
-                    
-                    trial_data = trial_data[(trial_data['time']>=time_window[0])& (trial_data['time']<=time_window[1])]
-                    neg_voltage = V_in_meas[ind][0] - trial_data['V_dev']
-                    log_voltage = np.log(neg_voltage) -np.log(V_in_meas[ind][0])
-                    t = trial_data['time'].values.reshape(-1,1)
-                    Amatrix = np.hstack((t, np.ones(t.shape)))
-                    res = np.linalg.lstsq(Amatrix, log_voltage, rcond=None)
-                    tau, y_intcp = res[0]
-                    if plot:
-                        ax[0].plot(trial_data['time'], trial_data['V_dev'], color = colors[ind])
-                        ax[1].plot(trial_data['time'], log_voltage, color = colors[ind])
-                        ax[1].plot(t, Amatrix@res[0],'--', color = colors[ind])
-                    output.append((tau, y_intcp, res[1]))
+                    t_max = range[4] - 0.25*(range[4]-range[1])
+                    time_windows = [(0, t_max)] # gets time window values for data
+                    taus = []
+                    y_intcps =[]
+                    r2s = []
+                    for time_window in time_windows:
+                        trial_data2 = trial_data[(trial_data['time']>=time_window[0])& (trial_data['time']<=time_window[1])]
+                        neg_voltage = V_in_meas[ind][0] - trial_data2['V_dev']
+                        log_voltage = np.log(np.abs(neg_voltage))
+                        t = trial_data2['time'].values.reshape(-1,1)
+                        Amatrix = np.hstack((t, np.ones(t.shape)))
+                        res = np.linalg.lstsq(Amatrix, log_voltage, rcond=None)
+                        tau, y_intcp = res[0]
+                        if plot:
+                            ax[0].plot(trial_data2['time'], trial_data2['V_dev'], color = colors[ind])
+                            ax[1].plot(trial_data2['time'], log_voltage, color = colors[ind])
+                            ax[1].plot(t, Amatrix@res[0],'--', color = colors[ind])
+                        taus.append(tau)
+                        y_intcps.append(y_intcp)
+                        r2s.append(res[0])
+                    output.append((1/taus[0], y_intcps[0], r2s[0]))#,1/taus[1], y_intcps[1], r2s[1]))
                 else:
                     output.append((None, None, None))
             return output
@@ -291,6 +307,30 @@ class TrialPr():
                 std_voltage = np.std(trial_data[voltage_channel])
                 output.append((mean_voltage, std_voltage))
             return output
+    def plot_trial_summary(self):
+        """Plots all summary FOMS for trial"""
+        fig,ax = plt.subplots(2,2)
+        fig.suptitle(f'Nom {self.nom_voltage}V, delay = {self.delay} ms')
+        x_values = np.arange(0, self.set_size*len(self.hr_data))
+        current_taus = [[item[0] for item in val] for _,val in self.current_taus.items()]
+        voltage_taus = [[item[0] for item in val] for _,val in self.voltage_taus.items()]
+        max_current = [[item[2] for item in val] for _,val in self.current_peaks.items()]
+        v_in_mes = [[item[0] for item in val] for _,val in self.V_in_meas.items()]
+        v_in_mes_std = [[item[1] for item in val] for _,val in self.V_in_meas.items()]
+
+
+        current_taus = np.array(current_taus).flatten()
+        v_in_mes = np.array(v_in_mes).flatten()
+        v_in_mes_std = np.array(v_in_mes_std).flatten()
+        voltage_taus = np.array(voltage_taus).flatten()
+        max_current = np.array(max_current).flatten()
+        
+        ax = ax.flatten()
+        ax[0].scatter(x_values, current_taus)
+        ax[1].scatter(x_values[0:5], voltage_taus)
+        ax[2].scatter(x_values, max_current)
+        ax[3].errorbar(x_values, v_in_mes, v_in_mes_std, fmt = "o" )
+
 
 
 
@@ -330,21 +370,25 @@ for i in range(e_pr.trial_data.shape[0]):
     for j in range(e_pr.trial_data.shape[1]):
         print(i,j)
         this_trial= e_pr.this_trial(i,j)
-        this_trial.separate_data()
-        # this_trial.plot_time(this_trial.hr_data['charge_B'])
-        this_trial.align_all_to_trigger()
-        # this_trial.plot_time(this_trial.hr_data['charge_A'])
-        # this_trial.plot_time(this_trial.hr_data['discharge_A'])
-        this_trial.plot_time(this_trial.hr_data['charge_A'], trigger='trigger')
-        this_trial.plot_time(this_trial.hr_data['charge_A'], [-1e-5, 7e-5], trigger='trigger' , filter_trigger=True)
-        # this_trial.plot_time(this_trial.hr_data['discharge_A'], [-0.00001, 0.00007])
-        peaks = this_trial.detect_peak_current(['charge_A', 'discharge_A','charge_B', 'discharge_B'], time_window = [-1e-5,7e-5], frac = 0.1)
-        this_trial.current_time_constant_est(['charge_A'], plot = True, filter=this_trial.well_triggered)
-        this_trial.get_input_voltage(['charge_A', 'discharge_A','charge_B', 'discharge_B'])
-        this_trial.voltage_time_constant_est(['charge_A'], plot = True, filter = this_trial.well_triggered)
+        this_trial.analyze()
+        this_trial.plot_trial_summary()
+        # this_trial.separate_data()
+        # # this_trial.plot_time(this_trial.hr_data['charge_B'])
+        # this_trial.align_all_to_trigger()
+        # # this_trial.plot_time(this_trial.hr_data['charge_A'])
+        # # this_trial.plot_time(this_trial.hr_data['discharge_A'])
+        # # this_trial.plot_time(this_trial.hr_data['charge_A'], trigger='trigger')
+        # this_trial.plot_time(this_trial.hr_data['charge_A'], [-1e-5, 7e-5], trigger='trigger' , filter_trigger=True)
+        # this_trial.plot_time(this_trial.hr_data['discharge_A'], [-1e-5, 7e-5], trigger='trigger' , filter_trigger=True)
+        # # this_trial.plot_time(this_trial.hr_data['discharge_A'], [-0.00001, 0.00007])
+        # peaks = this_trial.detect_peak_current(['charge_A', 'discharge_A','charge_B', 'discharge_B'], time_window = [-1e-5,7e-5], frac = 0.1)
+        # this_trial.current_time_constant_est(['charge_A', 'discharge_A'], plot = True, filter=this_trial.well_triggered)
+        # this_trial.get_input_voltage(['charge_A', 'discharge_A','charge_B', 'discharge_B'])
+        # this_trial.voltage_time_constant_est(['charge_A', 'discharge_A'], plot = True, filter = this_trial.well_triggered)
         print(this_trial.V_in_meas)
         # this_trial.plot_time([this_trial.initial_recording])
         plt.show()
+
 
  # %%
 
@@ -356,4 +400,5 @@ this_trial.align_all_to_trigger()
 peaks = this_trial.detect_peak_current(['charge_A','discharge_A'], time_window = [-1e-5,7e-5], frac = 0.1)
 # %%
 this_trial.current_time_constant_est('discharge_A', plot = True)
+
 # %%

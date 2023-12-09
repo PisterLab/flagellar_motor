@@ -20,9 +20,10 @@ class ElectricalDataPr():
         self.fname = os.path.basename(pickled_file_path).split('/')[-1]
         with open(pickled_file_path, 'rb') as file:
             self.metadata, self.trial_data = pickle.load(file)
+        self.trials = np.empty(self.trial_data.shape[0:2], dtype = TrialPr)
     def this_trial(self,i,j):
         """
-        Returns  the trial data for the (i,j)th data
+        Creates the trial data for the (i,j)th data
         """
         
         nom_voltage = self.metadata['V_in'][i,j,:]
@@ -37,6 +38,78 @@ class ElectricalDataPr():
         else:
             trial = TrialPr(self.trial_data[i,j,:], nom_voltage=nom_voltage[0], delay = delay[0], light_level=light_level[0])
             return trial
+
+    def analyze_all_trials(self):
+        """Runs through all the trials in a file"""
+        for i in range(e_pr.trial_data.shape[0]):
+            for j in range(e_pr.trial_data.shape[1]):
+                this_trial = self.this_trial(i,j)
+                this_trial.analyze()
+                self.trials[i,j] = this_trial
+
+    def plot_voltage_nom(self, cat = 'charge_A', errors = True):
+        """plots nominal vs input voltage over all trials"""
+        cmap = mpl.cm.get_cmap('viridis')
+        colors = cmap(np.linspace(0,1,self.trials.shape[1]))
+        markers = [',', '+', '.', 'o', '*']
+        nom_vs = np.empty(self.trials.shape)
+        measured_voltages = np.empty((*self.trials.shape,5))
+        measured_stds = np.empty((*self.trials.shape,5))
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Nominal input voltage (V)')
+        ax.set_ylabel('Measured input voltage')
+        for i in range(self.trials.shape[0]):
+            for j in range(self.trial_data.shape[1]):
+                this_trial = self.trials[i,j]
+                vs = [meas[0] for meas in this_trial.V_in_meas[cat]]
+                vs = np.array(vs)
+                measured_voltages[i,j,:] = vs
+                stds = [meas[1] for meas in this_trial.V_in_meas[cat]]
+                stds = np.array(stds)
+                measured_voltages[i,j,:] = stds
+                if errors:
+                    ax.errorbar(this_trial.nom_voltage * np.ones(stds.shape), vs, yerr = stds, color = colors[j], marker = markers[i%5],fmt = 'o')
+                else:
+                    ax.scatter(this_trial.nom_voltage * np.ones(stds.shape), vs, color = colors[j], marker = markers[i%5])
+                nom_vs[i,j] = this_trial.nom_voltage
+        ax.plot(nom_vs[i,:], nom_vs[i,:],'--', color = 'black')
+    def plot_vin_vs_tau(self, cat = 'charge_A', tau_type = 'current', plot_det = False):
+        """ plots taus for given category and current against input voltage"""
+        cmap = mpl.cm.get_cmap('viridis')
+        colors = cmap(np.linspace(0,1,self.trials.shape[1]))
+        markers = [',', '+', '.', 'o', '*']
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Input voltage (V)')
+        ax.set_ylabel(f'{tau_type.capitalize()} Tau (s)')
+        ax.set_title(f'{cat}_{tau_type}')
+        cat_v = f'charge_{cat[-1]}'
+        for i in range(self.trials.shape[0]):
+            for j in range(self.trial_data.shape[1]):
+                this_trial = self.trials[i,j] #type: TrialPr
+                vs = [meas[0] for meas in this_trial.V_in_meas[cat_v]]
+                if tau_type == 'current':
+                    taus = [tau[0] for tau in this_trial.current_taus[cat]]
+                elif tau_type =='voltage':
+                    taus = [tau[0] for  tau in this_trial.voltage_taus[cat]]
+
+                ax.scatter(vs, -np.array(taus), color = colors[j], marker = markers[i%5])
+                if plot_det:
+                    this_trial.current_time_constant_est(cat, True)
+        return fig, ax
+
+
+
+
+
+
+
+
+
+
+
+ 
+        
+
 
 
 # %% 
@@ -187,7 +260,7 @@ class TrialPr():
             results = {}
             for cat in data_category:
                 if filter ==True:
-                    this_filt = None
+                    this_filt = True
                 else:
                     this_filt = filter[cat]
                 results[cat] = self.current_time_constant_est(cat, plot = plot, filter = this_filt)
@@ -317,8 +390,6 @@ class TrialPr():
         max_current = [[item[2] for item in val] for _,val in self.current_peaks.items()]
         v_in_mes = [[item[0] for item in val] for _,val in self.V_in_meas.items()]
         v_in_mes_std = [[item[1] for item in val] for _,val in self.V_in_meas.items()]
-
-
         current_taus = np.array(current_taus).flatten()
         v_in_mes = np.array(v_in_mes).flatten()
         v_in_mes_std = np.array(v_in_mes_std).flatten()
@@ -337,68 +408,63 @@ class TrialPr():
 
 
 
-# %%
-# root = Tk()
-# root.withdraw()
-
-# pickle_file = filedialog.askopenfilenames(filetypes=[("Pickle py files", "*.py")])[0]
-pickle_file = 'C:/Users/mbustamante/Box Sync/Research/Flagellar Motor/Probe tests/20231028/F8F15_B18_E_P1P2P3_220313_data.py'
-
-# %%
-e_pr = ElectricalDataPr(pickle_file)
-# %%
-# e_pr.trial_data.shape
-
-# # %%
-# this_trial = e_pr.this_trial(3,0)
-# # %%
-# this_trial.separate_data()
-# # %%
-# this_trial.plot_time(this_trial.hr_data['charge_B'])
-# # %%
-# this_trial.plot_time(this_trial.hr_data['charge_B'], [-0.00001, 0.00005])
-# # %%
-# # this_trial.align_to_trigger(this_trial.hr_data['charge_A'], rising_edge=True)
 # # 
-# this_trial.align_all_to_trigger()
+# # root = Tk()
+# # root.withdraw()
+
+# # pickle_file = filedialog.askopenfilenames(filetypes=[("Pickle py files", "*.py")])[0]
+# pickle_file = 'C:/Users/mbustamante/Box Sync/Research/Flagellar Motor/Probe tests/20231028/F8F15_B18_E_P1P2P3_220313_data.py'
 
 # # %%
-# this_trial.plot_time(this_trial.hr_data['charge_B'])
-# %%
+# e_pr = ElectricalDataPr(pickle_file)
+# # %%
+# e_pr.analyze_all_trials()
 
-for i in range(e_pr.trial_data.shape[0]):
-    for j in range(e_pr.trial_data.shape[1]):
-        print(i,j)
-        this_trial= e_pr.this_trial(i,j)
-        this_trial.analyze()
-        this_trial.plot_trial_summary()
-        # this_trial.separate_data()
-        # # this_trial.plot_time(this_trial.hr_data['charge_B'])
-        # this_trial.align_all_to_trigger()
-        # # this_trial.plot_time(this_trial.hr_data['charge_A'])
-        # # this_trial.plot_time(this_trial.hr_data['discharge_A'])
-        # # this_trial.plot_time(this_trial.hr_data['charge_A'], trigger='trigger')
-        # this_trial.plot_time(this_trial.hr_data['charge_A'], [-1e-5, 7e-5], trigger='trigger' , filter_trigger=True)
-        # this_trial.plot_time(this_trial.hr_data['discharge_A'], [-1e-5, 7e-5], trigger='trigger' , filter_trigger=True)
-        # # this_trial.plot_time(this_trial.hr_data['discharge_A'], [-0.00001, 0.00007])
-        # peaks = this_trial.detect_peak_current(['charge_A', 'discharge_A','charge_B', 'discharge_B'], time_window = [-1e-5,7e-5], frac = 0.1)
-        # this_trial.current_time_constant_est(['charge_A', 'discharge_A'], plot = True, filter=this_trial.well_triggered)
-        # this_trial.get_input_voltage(['charge_A', 'discharge_A','charge_B', 'discharge_B'])
-        # this_trial.voltage_time_constant_est(['charge_A', 'discharge_A'], plot = True, filter = this_trial.well_triggered)
-        print(this_trial.V_in_meas)
-        # this_trial.plot_time([this_trial.initial_recording])
-        plt.show()
+# # %%
+# e_pr.plot_vin_vs_tau(cat= 'charge_A', tau_type= 'current')
+
+# e_pr.plot_vin_vs_tau(cat= 'discharge_A', tau_type= 'current')
+
+# e_pr.plot_vin_vs_tau(cat='charge_A', tau_type = 'voltage', plot_det = True)
+# # e_pr.plot_vin_vs_tau(cat = 'discharge_A', tau_type='voltage')
+# # %%
+# # e_pr.trials[0,0].V_in_meas
+# # e_pr.trial_data.shape
+
+# # # %%
+# # this_trial = e_pr.this_trial(3,0)
+# # # %%
+# # this_trial.separate_data()
+# # # %%
+# # this_trial.plot_time(this_trial.hr_data['charge_B'])
+# # # %%
+# # this_trial.plot_time(this_trial.hr_data['charge_B'], [-0.00001, 0.00005])
+# # # %%
+# # # this_trial.align_to_trigger(this_trial.hr_data['charge_A'], rising_edge=True)
+# # # 
+# # this_trial.align_all_to_trigger()
+
+# # # %%
+# # this_trial.plot_time(this_trial.hr_data['charge_B'])
 
 
- # %%
+# #  # %%
+# # e_pr.plot_voltage_nom(errors= False)
+# # # %%
+# # i=0
+# # j=2
+# # this_trial = e_pr.this_trial(i,j)
+# # # %%
+# # this_trial.separate_data()
+# # this_trial.align_all_to_trigger()
+# # peaks = this_trial.detect_peak_current(['charge_A','discharge_A', 'charge_B'], time_window = [-1e-5,7e-5], frac = 0.1)
+# # # %%
+# # this_trial.analyze()
 
-# %%
-this_trial = e_pr.this_trial(i,j)
-# %%
-this_trial.separate_data()
-this_trial.align_all_to_trigger()
-peaks = this_trial.detect_peak_current(['charge_A','discharge_A'], time_window = [-1e-5,7e-5], frac = 0.1)
-# %%
-this_trial.current_time_constant_est('discharge_A', plot = True)
 
-# %%
+
+# # # %%
+# # this_trial.plot_trial_summary()
+# # 9# %%
+
+# # %%

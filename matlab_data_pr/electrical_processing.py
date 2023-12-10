@@ -41,8 +41,8 @@ class ElectricalDataPr():
 
     def analyze_all_trials(self):
         """Runs through all the trials in a file"""
-        for i in range(e_pr.trial_data.shape[0]):
-            for j in range(e_pr.trial_data.shape[1]):
+        for i in range(self.trial_data.shape[0]):
+            for j in range(self.trial_data.shape[1]):
                 this_trial = self.this_trial(i,j)
                 this_trial.analyze()
                 self.trials[i,j] = this_trial
@@ -96,9 +96,10 @@ class ElectricalDataPr():
                 if plot_det:
                     this_trial.current_time_constant_est(cat, True)
         return fig, ax
-
-
-
+    def video_file_paths(self):
+        """returns video file paths for matlab"""
+        return self.metadata['video_fname']
+    
 
 
 
@@ -138,7 +139,7 @@ class TrialPr():
         self.detect_peak_current(available_cats, frac = 0.1, filter = self.well_triggered)
         self.current_time_constant_est(available_cats, False, filter = self.well_triggered)
         self.get_input_voltage(available_cats, [3e-5, self.delay/1000*0.75])
-        self.voltage_time_constant_est(['charge_A'], filter = self.well_triggered)
+        self.voltage_time_constant_est(['charge_A', 'discharge_A'], filter = self.well_triggered)
 
     def separate_data(self):
         """This separates data into different kinds of recordings"""
@@ -448,7 +449,7 @@ class TrialPr():
 # # this_trial.plot_time(this_trial.hr_data['charge_B'])
 
 
-# #  # %%
+# #  # %%0
 # # e_pr.plot_voltage_nom(errors= False)
 # # # %%
 # # i=0

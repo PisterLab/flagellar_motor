@@ -1,0 +1,11 @@
+.params m=3.8141n
+.params epsilon=8.85p
+.params mu=18.5u
+.params N=75
+.params t =40.0u
+.params l=59.99999999999999u
+.params g1=5.85u
+.params g2=8.77u
+.params g3=4.85u
+.params b=3.1971840000000005*(10**-21)
+.params ks=15.28

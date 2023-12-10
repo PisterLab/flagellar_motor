@@ -19,11 +19,11 @@ design_module_path = 'c:\\Users\\mbustamante\\Box Sync\\Research\\Flagellar Moto
 if design_module_path not in sys.path:
     sys.path.append(design_module_path) 
 import masks._20230328_mbustama_kr.krypton_analysis as kr_ana
-# %%
-root = Tk()
-root.withdraw()
+# # %%
+# root = Tk()
+# root.withdraw()
 
-csv_file = filedialog.askopenfilenames(filetypes=[("CSV files", "*.csv")])[0]
+# csv_file = filedialog.askopenfilenames(filetypes=[("CSV files", "*.csv")])[0]
 
 
 
@@ -324,19 +324,19 @@ class AngularDataSC():
 
 # %% 
 
-processor = AngularDataPr(csv_file)
-time_correction_factor =30/41.25
-processor.process_all(time_correction_factor=time_correction_factor, visualize = False)
-processor.save_FOMS()
+# processor = AngularDataPr(csv_file)
+# time_correction_factor =30/41.25
+# processor.process_all(time_correction_factor=time_correction_factor, visualize = False)
+# processor.save_FOMS()
 
-# %% 
-processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='delay_time')
-processor.plot_FOMS(y_var='reg_speed', primary_var='delay_time', secondary_var='nom_voltage')
+# # %% 
+# processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='delay_time')
+# processor.plot_FOMS(y_var='reg_speed', primary_var='delay_time', secondary_var='nom_voltage')
 
-# %%
+# # %%
 
-processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='frequency')
-processor.plot_FOMS(y_var='reg_speed', primary_var='frequency', secondary_var='nom_voltage')
+# processor.plot_FOMS(y_var='average_speed', primary_var='nom_voltage', secondary_var='frequency')
+# processor.plot_FOMS(y_var='reg_speed', primary_var='frequency', secondary_var='nom_voltage')
 # %%
 # for i in range(0,len(processor.time_cols)):
 #     time_correction_factor = 30/41.25

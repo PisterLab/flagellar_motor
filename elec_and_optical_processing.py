@@ -29,9 +29,9 @@ class JoinProcessor():
         self.csv_fpath = os.path.join(elec_fpath, *fpath_comps, csv_tail)
         self.Opti = opt.AngularDataPr(self.csv_fpath)
         self.Elec.analyze_all_trials()
-    def analyze_video_data(self, correction_factor =30/42.15 ):
+    def analyze_video_data(self, correction_factor =30/42.15, visualize = True ):
 
-        self.Opti.process_all(time_correction_factor= correction_factor, visualize=True)
+        self.Opti.process_all(time_correction_factor= correction_factor, visualize=visualize)
         self.Opti.save_FOMS()
         # self.motion_csv_fpath = os.path.join(os.path.split(self.pickled_fpath)[0], os.path.split(self.Elec)
 
@@ -133,6 +133,7 @@ class JoinProcessor():
         elif xaxis == 'meas_voltages' or xaxis == 'nom_voltages':
             x_dim = 1
             x_var = getattr(self, xaxis)
+
         leg_dim = (x_dim +1)%2
         cmap = mpl.cm.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,self.Elec.trial_data.shape[leg_dim]))
@@ -151,24 +152,46 @@ class JoinProcessor():
         ax.set_ylabel(yaxis)
         ax.legend(handles, leg_var[index_order, 0], title = legend)
         return fig, ax 
+    def plot_with_colorbar(self, xaxis, yaxis, coloraxis):
+        fig, ax = plt.subplots()
+        if xaxis == 'times' or xaxis =='frequency':
+            x_dim = 0
+            if xaxis == 'times':
+                x_var = self.times
+            if xaxis == 'frequency':
+                x_var = 1/self.times*1e3 
+            
+        elif xaxis == 'meas_voltages' or xaxis == 'nom_voltages':
+            x_dim = 1
+            x_var = getattr(self, xaxis)
 
-# %% 
+        cmap = mpl.cm.get_cmap('viridis')
+        y_var = getattr(self, yaxis)
+        leg_var = getattr(self, coloraxis)
+        handles = ax.scatter(x_var, y_var, c = leg_var, cmap = cmap, label = coloraxis )
+        ax.set_xlabel(xaxis)
+        ax.set_ylabel(yaxis)
+        plt.colorbar(handles)
 
-pickle_file = 'C:/Users/mbustamante/Box Sync/Research/Flagellar Motor/Probe tests/20231028/F8F15_B18_E_P1P2P3_213679_data.py'
+# # %% 
 
-pr = JoinProcessor(pickle_file)
-pr.analyze_video_data(correction_factor=30/42.15)
+# pickle_file = 'C:/Users/mbustamante/Box Sync/Research/Flagellar Motor/Probe tests/20231028/F8F15_B18_E_P1P2P3_213679_data.py'
 
-# %%
-pr.combine_data()
+# pr = JoinProcessor(pickle_file)
+# pr.analyze_video_data(correction_factor=30/42.15)
 
-# %%
-pr.voltage_vs_avg_speed()
+# # %%
+# pr.combine_data()
+
+# # %%
+# pr.voltage_vs_avg_speed()
 
 
-# %% 
-pr.plot('meas_voltages', 'speeds', 'times')
-pr.plot('times', 'speeds', 'meas_voltages')
-# %%
-pr.Elec.plot_voltage_nom('charge_A')
+# # %% 
+# pr.plot('meas_voltages', 'speeds', 'times')
+# pr.plot('times', 'speeds', 'nom_voltages')
+# pr.plot_with_colorbar('frequency', 'med_step_sizes', 'meas_voltages')
+# pr.plot_with_colorbar('frequency', 'speeds', 'meas_voltages')
+# # %%
+# pr.Elec.plot_voltage_nom('charge_A')
 # %%

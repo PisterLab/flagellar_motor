@@ -8,7 +8,6 @@ import os
 import pandas as pd
 import matlab.engine
 import pickle
-import sys
 
 # %% Import device characteristics
 
@@ -29,12 +28,16 @@ def load_mat():
 
 
 # %% 
-def process_matfile(out, file):
+def process_matfile(out, file, eng = None):
     num_delays, num_voltages, num_meas = out['output'].shape
 
     data = out['output']
-    eng = matlab.engine.start_matlab()
-    eng.evalc(f's = load("{file}");')
+    if eng is None:
+        eng = matlab.engine.start_matlab()
+    # eng = oct2py.Oct2Py()
+    eng.eval(f's = load("{file}");', nargout = 0)
+    print(file) 
+    print(eng.eval('s.note;')) 
     metadata = {
         'R_out': np.zeros(data.shape),
         'V_in': np.zeros(data.shape),
@@ -63,24 +66,32 @@ def process_matfile(out, file):
                     pass 
                 metadata['R_out'][i,j,k] = data[i,j,k]['R_out'][0][0][0,0]
                 metadata['V_in'][i,j,k] = data[i,j,k]['V_in'][0][0][0,0]
-                metadata['delay'][i,j,k] = data[i,j,k]['delay'][0][0][0,0]
+                if 'delay' in data[i,j,k].dtype.names:
+                    metadata['delay'][i,j,k] = data[i,j,k]['delay'][0][0][0,0]
+                else:
+                    metadata['delay'][i,j,k] = out['delay'][0][i]
                 metadata['light_level'][i,j,k] = data[i,j,k]['ligth_level'][0][0][0,0]
                 if k ==0:
-                    vfile = eng.evalc("s.output{{{0},{1},{2}}}.videoLogfile".format(i+1,j+1,k+1))
-                    metadata['video_fname'][i,j] = vfile.split('"')[1] 
+                    vfile = eng.eval("s.output{{{0},{1},{2}}}.videoLogfile".format(i+1,j+1,k+1))
+                    try:
+                        print()
+                        metadata['video_fname'][i,j] = vfile.split('"')[1] 
+                    except:
+                        metadata['video_fname'][i,j] = vfile
     return metadata, o_data
 # %%
 # %%
 out, files = load_mat()
 # %%
-for i, this_out in enumerate(out, start =6):
-    processed = process_matfile(this_out, files[i])
+eng = matlab.engine.start_matlab()
+for i, this_out in enumerate(out, start =0):
+    processed = process_matfile(this_out, files[i], eng)
     path,fname = os.path.split(files[i])
     name = fname.split('.mat')[0]
     output_fname = os.path.join(path, name+'.py')
     with open(output_fname, 'wb') as output_file:
         pickle.dump(processed,output_file)
         output_file.close()
-
+    eng.eval('clear s;', nargout =0)
 
 # %%

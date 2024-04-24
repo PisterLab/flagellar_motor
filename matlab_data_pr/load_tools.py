@@ -8,7 +8,8 @@ import os
 import pandas as pd
 import matlab.engine
 import pickle
-
+import pyperclip
+import re
 # %% Import device characteristics
 
 
@@ -37,7 +38,11 @@ def process_matfile(out, file, eng = None):
     # eng = oct2py.Oct2Py()
     eng.eval(f's = load("{file}");', nargout = 0)
     print(file) 
-    print(eng.eval('s.note;')) 
+    note = eng.eval('s.note;')
+    date = re.findall(r's/(2023\d{4})/', file)[0]
+    dev, time = re.findall(r'/([A-Z]\w+?)_(\d{6})',file)[0]
+    pyperclip.copy(f'{date}\t{dev}\t{time}\t\t{note}')
+    print(date, time, dev, note)
     metadata = {
         'R_out': np.zeros(data.shape),
         'V_in': np.zeros(data.shape),
@@ -50,6 +55,8 @@ def process_matfile(out, file, eng = None):
     for i in range(num_delays):
         for j in range(num_voltages):
             for k in range(num_meas):
+                if data[i,j,k].shape == (1,0) or 't' not in data[i,j,k].dtype.names:
+                    continue
                 time = data[i,j,k]['t'][0][0]
                 V_dev = data[i,j,k]['V_dev'][0][0]
                 V_rout = data[i,j,k]['V_rout'][0][0]
@@ -80,10 +87,11 @@ def process_matfile(out, file, eng = None):
                         metadata['video_fname'][i,j] = vfile
     return metadata, o_data
 # %%
+eng = matlab.engine.start_matlab()
 # %%
 out, files = load_mat()
 # %%
-eng = matlab.engine.start_matlab()
+# eng = matlab.engine.start_matlab()
 for i, this_out in enumerate(out, start =0):
     processed = process_matfile(this_out, files[i], eng)
     path,fname = os.path.split(files[i])

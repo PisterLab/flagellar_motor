@@ -12,7 +12,7 @@ import matplotlib as mpl
 
 import matlab_data_pr as elec
 import process_angular_data as opt
-
+from copy import copy
 
 # %%
 class JoinProcessor():
@@ -95,7 +95,7 @@ class JoinProcessor():
         times = np.empty(data_shape)
         speeds = np.empty(data_shape)
         fig, ax = plt.subplots(1,2)
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,self.Elec.trial_data.shape[0]))
         handles = []
         for i in range(self.Elec.trial_data.shape[0]):
@@ -121,21 +121,21 @@ class JoinProcessor():
         legend = list(zip(*legend))
         fig.legend(legend[1], legend[0], title = 'Delay time (ms)')
 
-    def plot(self, xaxis, yaxis, legend):
+    def plot(self, xaxis, yaxis, legend, log = False):
         fig, ax = plt.subplots()
         if xaxis == 'times' or xaxis =='frequency':
             x_dim = 0
             if xaxis == 'times':
                 x_var = self.times
             if xaxis == 'frequency':
-                x_var = 1/self.times*1e3 
+                x_var = 1/(4*self.times*1e3)
             
         elif xaxis == 'meas_voltages' or xaxis == 'nom_voltages':
             x_dim = 1
             x_var = getattr(self, xaxis)
 
         leg_dim = (x_dim +1)%2
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,self.Elec.trial_data.shape[leg_dim]))
         y_var = getattr(self, yaxis)
         leg_var = getattr(self, legend)
@@ -146,32 +146,84 @@ class JoinProcessor():
         handles = []
         index_order = np.argsort(leg_var[:,0])
         for ind in index_order:
-            handles.append(ax.scatter(x_var[ind, :], y_var[ind,:], color =colors[ind]))
+            if not log:
+                x_plot = x_var[ind,:]
+                y_plot = y_var[ind,:]
+                append_x = ''
+                append_y = ''
+            elif log == 'loglog':
+                x_plot = np.log10(x_var[ind,:])
+                y_plot = np.log10(y_var[ind,:])
+                append_x = 'log '
+                append_y = 'log '
+            elif log == 'semilog':
+                x_plot = np.log10(x_var[ind,:])
+                y_plot = y_var[ind,:]
+                append_x = 'log '
+                append_y = ''
+            handles.append(ax.scatter(x_plot, y_plot, color =colors[ind]))
 
-        ax.set_xlabel(xaxis)
-        ax.set_ylabel(yaxis)
+        ax.set_xlabel(f'{append_x}{xaxis}')
+        ax.set_ylabel(f'{append_y}{yaxis}')
         ax.legend(handles, leg_var[index_order, 0], title = legend)
         return fig, ax 
-    def plot_with_colorbar(self, xaxis, yaxis, coloraxis):
+    def plot_with_colorbar(self, xaxis, yaxis, coloraxis, log = False):
         fig, ax = plt.subplots()
         if xaxis == 'times' or xaxis =='frequency':
             x_dim = 0
             if xaxis == 'times':
                 x_var = self.times
             if xaxis == 'frequency':
-                x_var = 1/self.times*1e3 
+                x_var = 1/(4*self.times)*1e3 
             
         elif xaxis == 'meas_voltages' or xaxis == 'nom_voltages':
             x_dim = 1
             x_var = getattr(self, xaxis)
 
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         y_var = getattr(self, yaxis)
         leg_var = getattr(self, coloraxis)
-        handles = ax.scatter(x_var, y_var, c = leg_var, cmap = cmap, label = coloraxis )
-        ax.set_xlabel(xaxis)
-        ax.set_ylabel(yaxis)
+        if not log:
+            x_plot = x_var
+            y_plot = y_var
+            append_x = ''
+            append_y = ''
+        elif log == 'loglog':
+            x_plot = np.log10(x_var)
+            y_plot = np.log10(y_var)
+            append_x = 'log '
+            append_y = 'log '
+        elif log == 'semilog':
+            x_plot = np.log10(x_var)
+            y_plot = y_var
+            append_x = 'log '
+            append_y = ''
+        handles = ax.scatter(x_plot, y_plot, c = leg_var, cmap = cmap, label = coloraxis )
+        ax.set_xlabel(append_x + xaxis)
+        ax.set_ylabel(append_y + yaxis)
         plt.colorbar(handles)
+    def __add__(self, pr2):
+            new_pr = copy(self)
+            attr_list = ['speeds', 'times', 'meas_voltages', 'nom_voltages', 'med_step_periods', 'med_step_sizes', 
+            'avg_step_sizes', ]
+            for elemn in attr_list:
+                val = np.concatenate([getattr(self, elemn), getattr(pr2, elemn)], axis =0)
+                setattr(new_pr, elemn, val)
+                # new_pr.speeds = np.concatenate([self.speeds, pr2.speeds], axis =0)
+                # new_pr.times = np.concatenate([self.times, pr2.times], axis =0)
+            dict_attr_list = ['voltage_taus', 'current_taus']
+            for elemn in dict_attr_list:
+                attr1 = getattr(self, elemn)#type: dict 
+                attr2 = getattr(pr2, elemn) #type: dict
+                attr = copy(attr1)
+                for key in attr1.keys():
+                    attr[key] =  np.concatenate([attr1[key], attr2[key]], axis=0)
+                setattr(new_pr, elemn, attr)
+                new_pr.Elec = self.Elec+ pr2.Elec
+            new_pr.Opti = [self.Opti, pr2.Opti]
+        
+            new_pr.subprs = [self, pr2]
+            return new_pr
 
 # # %% 
 
@@ -195,3 +247,12 @@ class JoinProcessor():
 # # %%
 # pr.Elec.plot_voltage_nom('charge_A')
 # %%
+# def join_two_processors(pr1: JoinProcessor, pr2:JoinProcessor):
+#     new_pr = copy(pr1)
+#     new_pr.speeds = np.concatenate(pr1.speeds, pr2.speeds)
+#     new_pr.times = np.concatenate(pr1.times, pr2.times)
+#     for key in new_pr.voltage_taus.keys():
+#         new_pr.voltage_taus[key] = np.concatenate(pr1.voltage_taus[key], pr2.voltage_taus[key], axis=0)
+#     new_pr.Elec = [pr1.Elec, pr2.Elec]
+#     new_pr.Opti = [pr1.Opti, pr2.Opti]
+#     return new_pr

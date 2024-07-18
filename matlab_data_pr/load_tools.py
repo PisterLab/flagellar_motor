@@ -40,7 +40,7 @@ def process_matfile(out, file, eng = None):
     print(file) 
     note = eng.eval('s.note;')
     date = re.findall(r's/(2023\d{4})/', file)[0]
-    dev, time = re.findall(r'/([A-Z]\w+?)_(\d{6})',file)[0]
+    dev, time = re.findall(r'/([A-Z][\w\s]+?)_(\d{6})',file)[0]
     pyperclip.copy(f'{date}\t{dev}\t{time}\t\t{note}')
     print(date, time, dev, note)
     metadata = {

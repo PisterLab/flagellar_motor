@@ -11,6 +11,7 @@ import pickle
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from copy import copy
 # %%
 
 class ElectricalDataPr():
@@ -49,7 +50,7 @@ class ElectricalDataPr():
 
     def plot_voltage_nom(self, cat = 'charge_A', errors = True):
         """plots nominal vs input voltage over all trials"""
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,self.trials.shape[1]))
         markers = [',', '+', '.', 'o', '*']
         nom_vs = np.empty(self.trials.shape)
@@ -75,7 +76,7 @@ class ElectricalDataPr():
         ax.plot(nom_vs[i,:], nom_vs[i,:],'--', color = 'black')
     def plot_vin_vs_tau(self, cat = 'charge_A', tau_type = 'current', plot_det = False):
         """ plots taus for given category and current against input voltage"""
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,self.trials.shape[1]))
         markers = [',', '+', '.', 'o', '*']
         fig, ax = plt.subplots()
@@ -99,6 +100,20 @@ class ElectricalDataPr():
     def video_file_paths(self):
         """returns video file paths for matlab"""
         return self.metadata['video_fname']
+    def __add__(self, elec2):
+        new_elec = copy(self)
+        new_elec.trial_data = np.concatenate([self.trial_data, elec2.trial_data], axis =0)
+        new_elec.trials = np.concatenate([self.trials, elec2.trials], axis =0)
+        for key in new_elec.metadata.keys():
+            if isinstance(new_elec.metadata[key], np.ndarray):
+                new_elec.metadata[key] = np.concatenate([self.metadata[key], elec2.metadata[key]], axis =0)
+            elif isinstance(new_elec.metadata[key], list):
+                new_elec.metadata[key].extend(elec2.metadata[key])
+            else:
+                pass
+        return new_elec
+
+
     
 
 
@@ -136,6 +151,8 @@ class TrialPr():
         self.separate_data()
         available_cats = list(self.hr_data.keys())
         self.align_all_to_trigger()
+        charge_cats = [cat for cat in available_cats if 'dis' not in cat]
+        self.baseline('V_rout', charge_cats, time_window=(7e-5,14e-5))
         self.detect_peak_current(available_cats, frac = 0.1, filter = self.well_triggered)
         self.current_time_constant_est(available_cats, False, filter = self.well_triggered)
         self.get_input_voltage(available_cats, [3e-5, self.delay/1000*0.75])
@@ -175,7 +192,7 @@ class TrialPr():
     def plot_time(self, data:'np.ndarray[pd.DataFrame]', time_window = None, trigger = 'trigger', filter_trigger = False):
         num_of_trials = len(data)
         fig, ax = plt.subplots(3,1, sharex=True)
-        cmap = mpl.cm.get_cmap('viridis')
+        cmap = plt.get_cmap('viridis')
         colors = cmap(np.linspace(0,1,num_of_trials))
         for ind, trial_data in enumerate(data):
             if time_window is None:
@@ -237,8 +254,9 @@ class TrialPr():
                 filter = [True for _ in data]
             for ind, trial_data in enumerate(data):
                 if (filter is not None) and (filter[ind]):
+
                     trial_data = trial_data[(trial_data['time']>=time_window[0])& (trial_data['time']<=time_window[1])]
-                    abs_I = np.abs(trial_data['V_rout'])
+                    abs_I = np.abs( trial_data['V_rout'])
                     argmax = abs_I.idxmax()
                     max_I = trial_data['V_rout'].loc[argmax]
                     time_point = trial_data['time'].loc[argmax]
@@ -274,7 +292,7 @@ class TrialPr():
             if filter == True:
                 filter = [True for _ in data]
             if plot:
-                cmap = mpl.cm.get_cmap('viridis')
+                cmap = plt.get_cmap('viridis')
                 colors = cmap(np.linspace(0,1,len(data)))
                 fig, ax = plt.subplots(2,1, sharex=True)   
                 ax[1].set_ylabel('Log V_rout')
@@ -322,7 +340,7 @@ class TrialPr():
             if filter == True:
                 filter = [True for _ in data]
             if plot:
-                cmap = mpl.cm.get_cmap('viridis')
+                cmap = plt.get_cmap('viridis')
                 colors = cmap(np.linspace(0,1,len(data)))
                 fig, ax = plt.subplots(2,1, sharex=True)   
                 ax[1].set_ylabel('Log V_dev')
@@ -402,6 +420,35 @@ class TrialPr():
         ax[1].scatter(x_values[0:5], voltage_taus)
         ax[2].scatter(x_values, max_current)
         ax[3].errorbar(x_values, v_in_mes, v_in_mes_std, fmt = "o" )
+    def baseline(self,signal = 'V_rout', data_category = 'charge_A', time_window = [7e-6, 1.4e-4],  filter = True):
+        if isinstance(data_category,list):
+            results = {}
+            for cat in data_category:
+                if filter is True:
+                    this_filt = True
+                else:
+                    this_filt = filter[cat]
+                results[cat] = self.baseline(signal, cat, time_window = time_window, filter = this_filt)
+            self.current_peaks = results
+            return results
+        
+        else:
+            data = self.hr_data[data_category]
+            output = []
+            if filter == True:
+                filter = [True for _ in data]
+            for ind, trial_data in enumerate(data):
+                if (filter is not None) and (filter[ind]):
+                    trial_data = trial_data[(trial_data['time']>=time_window[0])& (trial_data['time']<=time_window[1])]
+                    baseline = np.mean(trial_data[signal])
+                    self.hr_data[data_category][ind][signal +'_og'] = self.hr_data[data_category][ind][signal]
+                    self.hr_data[data_category][ind][signal] =  self.hr_data[data_category][ind][signal] - baseline
+
+                    
+
+
+
+
 
 
 

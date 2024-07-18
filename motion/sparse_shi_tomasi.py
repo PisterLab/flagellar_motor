@@ -61,7 +61,7 @@ def process_video_sparse(video_file):
     # num_features = 1000
     # distance = 0.5* np.sqrt(r[3]**2 + r[2]**2)
     # corners = cv.goodFeaturesToTrack(prev_gray,num_features,0.001,10, mask= mask)
-    corners = np.int0(corners)
+    # corners = np.int0(corners)
 
     # distance = int((r[2]*r[3]/num_features)**0.5)
 
@@ -79,9 +79,10 @@ def process_video_sparse(video_file):
     ret, old_frame = cap.read()
     old_gray = cv.cvtColor(old_frame, cv.COLOR_BGR2GRAY)
     p0 = np.float32(corners)
-    lk_params = dict( winSize  = (30, 30),
+    lk_params = dict( winSize  = (60, 60),
                   maxLevel = 15,
-                  criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,  50, 0.005))
+                  criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT,  100, 0.005),
+                   )
     # Create some random colors
     color = np.random.randint(0, 255, (num_features, 3))
     color2 = color[:,[2,0,1]]/255
@@ -93,6 +94,9 @@ def process_video_sparse(video_file):
     thetas = np.zeros((frame_count,))
     s = np.zeros((frame_count,))
     translation = np.zeros((frame_count,2))
+    pm1 = None
+    cv.namedWindow(video_file,cv.WINDOW_NORMAL)
+    # cv.setWindowProperty(video_file, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
     while(1):
         index = int(cap.get(cv.CAP_PROP_POS_FRAMES))
         ret, frame = cap.read()
@@ -101,7 +105,9 @@ def process_video_sparse(video_file):
             break
         frame_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         # calculate optical flow
-        p1, st, err = cv.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+        # if pm1 is not None:
+        #     lk_params = {**lk_params, 'flags':  (cv.OPTFLOW_USE_INITIAL_FLOW)}
+        p1, st, err = cv.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, pm1, **lk_params)
         # Select good points
         if p1 is not None:
             good_new = p1[st==1]
@@ -118,32 +124,32 @@ def process_video_sparse(video_file):
         dvel = vel - vel0
         dp0 = p0 - p0[idx0,...]
         dp1 = p1 - p1[idx0,...]
-        print(np.linalg.norm(vel0,2))
+        # print(np.linalg.norm(vel0,2))
         matrix, inliers = cv.estimateAffinePartial2D(p0*np.array((par, 1)), p1*np.array((par, 1)), None,method = cv.RANSAC, ransacReprojThreshold= 0.25,  maxIters=100, confidence=0.95 )
         theta = np.arctan(matrix[1,0]/matrix[1,1])
         s[index] = matrix[0,0]/np.cos(theta)
         translation[index, :] = matrix[...,2]
         thetas[index] = theta
-        if np.linalg.norm(vel0,2)>0.3:
-            print(index)
-            dp = p0 - p0[idx0,...]
-            fig, ax = plt.subplots(1,2)
-            ax[0].scatter(dp[...,0]*par, -dvel[...,1])#, color = color2[0:num_features,...])
-            ax[0].scatter(dp[...,1], dvel[...,0]*par)#, color = color2[0:num_features,...],marker = '*')
-            # ax[1].hist(-dvel[...,1]/(dp[...,0]*par))
-            # ax[1].scatter(dp[...,1], dvel[...,0]*par/(dp[...,1]))
-            # ax[1].scatter(p0[...,0]*par, -vel[...,0])
-            # ax[1].scatter(p0[...,1], vel[...,1]*par)
+        # if np.linalg.norm(vel0,2)>0.3:
+        #     # print(index)
+        #     dp = p0 - p0[idx0,...]
+        #     fig, ax = plt.subplots(1,2)
+        #     ax[0].scatter(dp[...,0]*par, -dvel[...,1])#, color = color2[0:num_features,...])
+        #     ax[0].scatter(dp[...,1], dvel[...,0]*par)#, color = color2[0:num_features,...],marker = '*')
+        #     # ax[1].hist(-dvel[...,1]/(dp[...,0]*par))
+        #     # ax[1].scatter(dp[...,1], dvel[...,0]*par/(dp[...,1]))
+        #     # ax[1].scatter(p0[...,0]*par, -vel[...,0])
+        #     # ax[1].scatter(p0[...,1], vel[...,1]*par)
             
-            ax[0].plot(dp[...,0]*par, -dp[...,0]*par*theta)
-            ax[0].plot(dp[...,1], -dp[...,1]*theta)
-            p1test = (p0*np.array((par, 1)))[:,0,:]@matrix[..., 0:2] + matrix[..., 2]
-            ax[1].scatter(p1[...,0]*par, p1test[...,0])
-            ax[1].scatter(p1[...,1], p1test[...,1])
-            ax[1].plot([300,900], [300,900])
-            ax[0].set_title(f'tetha = {theta}')
-            ax[1].set_title(f'inliers = {inliers.sum()/len(inliers)}')
-            plt.show()
+        #     ax[0].plot(dp[...,0]*par, -dp[...,0]*par*theta)
+        #     ax[0].plot(dp[...,1], -dp[...,1]*theta)
+        #     p1test = (p0*np.array((par, 1)))[:,0,:]@matrix[..., 0:2] + matrix[..., 2]
+        #     ax[1].scatter(p1[...,0]*par, p1test[...,0])
+        #     ax[1].scatter(p1[...,1], p1test[...,1])
+        #     ax[1].plot([300,900], [300,900])
+        #     ax[0].set_title(f'tetha = {theta}')
+        #     ax[1].set_title(f'inliers = {inliers.sum()/len(inliers)}')
+        #     plt.show()
         for i, (new, old) in enumerate(zip(good_new, good_old)):
             a, b = new.ravel()
             c, d = old.ravel()
@@ -152,12 +158,13 @@ def process_video_sparse(video_file):
             lines = cv.line(lines, (int(a), int(b)), (int(c), int(d)), color[i].tolist(), 2)
             frame = cv.circle(frame, (int(a), int(b)), 5, these_colors[i].tolist(), -1)
         img = cv.add(frame, lines)
-        cv.imshow('frame', img)
-        k = cv.waitKey(30) & 0xff
+        cv.imshow(video_file, img)
+        k = cv.waitKey(1) & 0xff
         if k == 27:
             break
         # Now update the previous frame and previous points
         old_gray = frame_gray.copy()
+        pm1 = good_old.reshape(-1, 1, 2)
         p0 = good_new.reshape(-1, 1, 2)
     cv.destroyAllWindows()
     
@@ -170,10 +177,11 @@ def main():
     root.withdraw()
 
     video_files = filedialog.askopenfilenames(filetypes=[("MP4 files", "*.mp4")])
+    root.deiconify()
     if not video_files:
         print("No video file selected.")
         return
-    
+    root.destroy()
     for video_file in video_files:
         directory = os.path.dirname(video_file)
         fname = os.path.basename(video_file).split('/')[-1]

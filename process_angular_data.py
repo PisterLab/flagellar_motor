@@ -137,7 +137,7 @@ class AngularDataPr():
     def plot_FOMS(
             self,y_var, primary_var = 'nom_voltage', secondary_var = 'delay_time', 
             xlabel = None, ylabel =None, legend_label = None,
-            colormap = mpl.cm.get_cmap('viridis')
+            colormap = plt.get_cmap('viridis')
             ):
         """ plots figure of merits, with primary var as x axis, secondary var as legend"""
         if not hasattr(self, 'summary_data'):
